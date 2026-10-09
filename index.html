@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101715">
+  <title>Wumpus World | Field Notes</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #e9eee8;
+      --muted: #9aa9a0;
+      --faint: #627168;
+      --bg: #101715;
+      --panel: #18211d;
+      --panel-2: #202c26;
+      --line: #344239;
+      --lime: #c6ef78;
+      --amber: #f3b758;
+      --coral: #ef796b;
+      --blue: #7bc8d3;
+      --cell: #25322b;
+      --cell-seen: #33453a;
+      --font: "Trebuchet MS", "Segoe UI", sans-serif;
+      --mono: "Cascadia Code", "Consolas", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--ink);
+      background-color: var(--bg);
+      background-image: radial-gradient(ellipse at 14% 12%, #26352b 0, transparent 35%), radial-gradient(ellipse at 88% 82%, #252d25 0, transparent 33%);
+      font-family: var(--font);
+    }
+    button { font: inherit; }
+    .shell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: 28px 0 36px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark { display: grid; place-items: center; width: 42px; aspect-ratio: 1; border: 1px solid #607250; border-radius: 12px; color: var(--lime); background: #263323; font-size: 22px; }
+    .eyebrow { margin: 0 0 3px; color: var(--lime); font: 700 10px var(--mono); letter-spacing: 1.4px; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 21px; font-weight: 700; }
+    .top-note { color: var(--muted); font: 12px var(--mono); }
+    main { display: grid; grid-template-columns: minmax(370px, 1.02fr) minmax(340px, .98fr); gap: 30px; padding-top: 24px; align-items: start; }
+    .section-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 14px; }
+    h2 { margin: 0; font-size: 15px; }
+    .coord-note { color: var(--muted); font: 11px var(--mono); }
+    .board-wrap { padding: 13px; border: 1px solid var(--line); border-radius: 8px; background: #151e19; box-shadow: 0 18px 50px #070b0980; }
+    .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; aspect-ratio: 1; }
+    .cell { position: relative; display: grid; place-items: center; min-width: 0; overflow: hidden; border: 1px solid #425348; border-radius: 5px; background: var(--cell); transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+    .cell.seen { border-color: #536a59; background: var(--cell-seen); }
+    .cell.current { z-index: 1; border: 2px solid var(--lime); box-shadow: 0 0 0 2px #c6ef7822, inset 0 0 25px #c6ef781c; }
+    .cell.unknown::after { content: ""; position: absolute; inset: 0; background-image: radial-gradient(#a9c19b2c 1px, transparent 1px); background-size: 9px 9px; opacity: .6; }
+    .cell.start:not(.current)::before { content: "START"; position: absolute; left: 6px; top: 5px; color: #c6ef7888; font: 8px var(--mono); }
+    .cell-content { position: relative; z-index: 2; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 3px; font-size: clamp(20px, 4.7vw, 38px); line-height: 1; }
+    .cell-player { filter: drop-shadow(0 2px 5px #000); }
+    .cell-label { position: absolute; z-index: 2; right: 5px; bottom: 4px; color: #d0dbcf8a; font: 9px var(--mono); }
+    .cell.ai-safe { box-shadow: inset 0 0 0 2px #7bc8d366; }
+    .cell.ai-risk::after { content: "?"; position: absolute; z-index: 2; right: 5px; top: 3px; color: var(--amber); font: 700 13px var(--mono); }
+    .under-board { display: flex; justify-content: space-between; gap: 12px; padding: 11px 2px 0; color: var(--muted); font: 10px var(--mono); }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 13px; margin-top: 14px; color: var(--muted); font-size: 11px; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend b { color: var(--ink); font-size: 15px; font-weight: 400; }
+    .legend i { display: inline-grid; place-items: center; width: 13px; height: 13px; border: 1px solid var(--blue); color: var(--blue); font: 700 9px var(--mono); font-style: normal; }
+    .legend i.risk-key { border: 0; color: var(--amber); font-size: 13px; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
+    .control-group { padding: 13px; border-top: 1px solid var(--line); }
+    .control-title { margin: 0 0 10px; color: var(--muted); font: 700 10px var(--mono); letter-spacing: .8px; text-transform: uppercase; }
+    .pad { display: grid; grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(2, 38px); justify-content: center; gap: 5px; }
+    .pad button, .icon-button { display: grid; place-items: center; border: 1px solid #506054; border-radius: 5px; color: var(--ink); background: var(--panel-2); cursor: pointer; transition: background .15s, border-color .15s, transform .15s; }
+    .pad button { font-size: 17px; }
+    .pad button:hover, .icon-button:hover { border-color: var(--lime); background: #334337; }
+    button:active { transform: translateY(1px); }
+    button:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+    .pad .north { grid-column: 2; }
+    .pad .west { grid-column: 1; grid-row: 2; }
+    .pad .south { grid-column: 2; grid-row: 2; }
+    .pad .east { grid-column: 3; grid-row: 2; }
+    .action-row { display: flex; gap: 8px; }
+    .action { min-height: 40px; flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid #506054; border-radius: 5px; color: var(--ink); background: var(--panel-2); cursor: pointer; font-size: 12px; font-weight: 700; }
+    .action.primary { border-color: #87a95a; color: #172014; background: var(--lime); }
+    .action.primary:hover { background: #d8ff94; }
+    .action:hover:not(.primary) { border-color: var(--lime); }
+    .action:disabled { opacity: .45; cursor: not-allowed; }
+    .right-column { display: grid; gap: 17px; }
+    .status-strip { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 10px 13px; border: 1px solid var(--line); border-left: 3px solid var(--lime); border-radius: 5px; background: #18211d; }
+    .status-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--lime); box-shadow: 0 0 10px #c6ef7880; }
+    .status-strip[data-state="lost"] { border-left-color: var(--coral); }
+    .status-strip[data-state="lost"] .status-dot { background: var(--coral); box-shadow: 0 0 10px #ef796b80; }
+    .status-strip[data-state="won"] { border-left-color: var(--amber); }
+    .status-strip[data-state="won"] .status-dot { background: var(--amber); box-shadow: 0 0 10px #f3b75880; }
+    .status-strip p { margin: 0; font-size: 13px; font-weight: 700; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--line); }
+    .stat { padding: 12px 9px; border-right: 1px solid var(--line); }
+    .stat:last-child { border: 0; }
+    .stat-label { color: var(--muted); font: 9px var(--mono); text-transform: uppercase; }
+    .stat-value { margin-top: 5px; font: 700 20px var(--mono); }
+    .stat-value small { color: var(--muted); font-size: 10px; }
+    .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .info-block { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 5px; background: #18211d; }
+    .info-block h3, .log-head h3 { margin: 0 0 10px; color: var(--muted); font: 700 10px var(--mono); letter-spacing: .9px; text-transform: uppercase; }
+    .readout { display: flex; flex-wrap: wrap; gap: 6px; min-height: 25px; }
+    .tag { padding: 5px 7px; border: 1px solid #4b5b50; border-radius: 3px; color: #d4ded2; background: #222e27; font: 10px var(--mono); }
+    .tag.stench { border-color: #a45b50; color: #ffaaa0; }
+    .tag.breeze { border-color: #57838a; color: #9ce1e9; }
+    .tag.glitter { border-color: #a78d4c; color: #ffdf8b; }
+    .tag.event { border-color: #536a59; color: var(--lime); }
+    .empty { color: var(--faint); font: 11px var(--mono); }
+    .position-line { color: var(--ink); font: 13px var(--mono); }
+    .position-line span { color: var(--muted); font-size: 10px; }
+    .knowledge { padding: 13px; border: 1px solid var(--line); border-radius: 5px; background: #18211d; }
+    .knowledge-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .knowledge-head h3 { margin: 0; font: 700 10px var(--mono); letter-spacing: .9px; text-transform: uppercase; }
+    .knowledge-head span { color: var(--blue); font: 10px var(--mono); }
+    .knowledge p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .log { border-top: 1px solid var(--line); }
+    .log-head { display: flex; justify-content: space-between; align-items: center; padding: 13px 0 9px; }
+    .log-head h3 { margin: 0; }
+    .icon-button { width: 28px; height: 26px; font-size: 11px; }
+    .log-list { display: grid; gap: 1px; max-height: 155px; overflow-y: auto; padding: 0; margin: 0; list-style: none; scrollbar-color: #536257 #18211d; }
+    .log-list li { display: grid; grid-template-columns: 31px 1fr; gap: 8px; padding: 7px 8px; color: #c3cdc3; background: #19221d; font-size: 11px; line-height: 1.4; }
+    .log-list time { color: var(--faint); font: 10px var(--mono); }
+    .instructions { margin-top: 20px; padding: 14px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .instructions summary { width: fit-content; color: var(--ink); cursor: pointer; font-weight: 700; }
+    .instructions p { max-width: 680px; margin: 9px 0 0; }
+    .instructions kbd { padding: 1px 4px; border: 1px solid #536257; border-radius: 3px; color: var(--ink); font: 10px var(--mono); }
+    @media (max-width: 790px) {
+      .shell { width: min(600px, calc(100% - 24px)); padding-top: 18px; }
+      main { grid-template-columns: 1fr; gap: 25px; padding-top: 19px; }
+      .top-note { max-width: 115px; text-align: right; line-height: 1.5; }
+      .cell-content { font-size: clamp(24px, 8vw, 40px); }
+      .right-column { grid-row: 1; }
+      .board-column { grid-row: 2; }
+    }
+    @media (max-width: 420px) {
+      .shell { width: calc(100% - 18px); }
+      .topbar { padding-bottom: 15px; }
+      h1 { font-size: 18px; }
+      .brand-mark { width: 37px; }
+      .board-wrap { padding: 8px; }
+      .board { gap: 5px; }
+      .controls { gap: 5px; }
+      .control-group { padding: 12px 6px; }
+      .info-row { gap: 8px; }
+      .info-block { padding: 10px; }
+      .stat { padding-inline: 6px; }
+      .stat-value { font-size: 17px; }
+      .action { font-size: 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">⌖</div>
+        <div><p class="eyebrow">Field notes · 04 × 04</p><h1>Wumpus World</h1></div>
+      </div>
+      <div class="top-note">One arrow. Find the gold. Make it home.</div>
+    </header>
+
+    <main>
+      <section class="board-column" aria-labelledby="map-title">
+        <div class="section-head"><h2 id="map-title">Cave map</h2><span class="coord-note">(0,0) top-left</span></div>
+        <div class="board-wrap">
+          <div class="board" id="board" role="grid" aria-label="Wumpus World cave map"></div>
+          <div class="under-board"><span id="visited-count">Rooms explored: 1 / 16</span><span id="map-key">? Unexplored</span></div>
+        </div>
+        <div class="legend" aria-label="Symbol legend">
+          <span><b>🧭</b> You</span><span><b>👹</b> Wumpus</span><span><b>🕳️</b> Pit</span><span><b>✨</b> Gold</span><span><b>🏠</b> Start</span>
+          <span><i aria-hidden="true"></i> Inferred safe</span><span><i class="risk-key" aria-hidden="true">?</i> Possible danger</span>
+        </div>
+        <div class="controls">
+          <div class="control-group">
+            <p class="control-title">Move · arrows / WASD</p>
+            <div class="pad" aria-label="Movement controls">
+              <button class="north" data-move="N" aria-label="Move north" title="Move north (Arrow Up / W)">↑</button>
+              <button class="west" data-move="W" aria-label="Move west" title="Move west (Arrow Left / A)">←</button>
+              <button class="south" data-move="S" aria-label="Move south" title="Move south (Arrow Down / S)">↓</button>
+              <button class="east" data-move="E" aria-label="Move east" title="Move east (Arrow Right / D)">→</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <p class="control-title">Actions</p>
+            <div class="action-row" style="margin-bottom:8px">
+              <button class="action" id="shoot-button" title="Shoot one arrow in the facing direction">➤ <span>Shoot</span></button>
+              <button class="action" id="restart-button" title="Start a new cave">↻ <span>Restart</span></button>
+            </div>
+            <button class="action primary" id="ai-button" style="width:100%" title="Start the knowledge-based agent">▶ <span>Start AI</span></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="right-column" aria-label="Expedition information">
+        <div class="status-strip" id="status-strip" data-state="playing" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span><p id="status-text">The cave is quiet. Find the gold and return to camp.</p>
+        </div>
+        <div class="stats" aria-label="Game statistics">
+          <div class="stat"><div class="stat-label">Score</div><div class="stat-value" id="score">0</div></div>
+          <div class="stat"><div class="stat-label">Arrows</div><div class="stat-value" id="arrows">1 <small> / 1</small></div></div>
+          <div class="stat"><div class="stat-label">Position</div><div class="stat-value" id="position">(0, 3)</div></div>
+          <div class="stat"><div class="stat-label">Facing</div><div class="stat-value" id="facing">↑ <small>N</small></div></div>
+        </div>
+        <div class="info-row">
+          <div class="info-block"><h3>Room percepts</h3><div class="readout" id="percepts" aria-live="polite"></div></div>
+          <div class="info-block"><h3>Agent location</h3><div class="position-line" id="agent-position">(0, 3) <span>· camp</span></div></div>
+        </div>
+        <div class="knowledge">
+          <div class="knowledge-head"><h3>Agent knowledge</h3><span id="agent-state">MANUAL</span></div>
+          <p id="knowledge-text">You are at camp. The adjacent rooms are safe to enter.</p>
+        </div>
+        <section class="log" aria-labelledby="log-title">
+          <div class="log-head"><h3 id="log-title">Expedition log</h3><button class="icon-button" id="clear-log" aria-label="Clear event log" title="Clear event log">⌫</button></div>
+          <ol class="log-list" id="event-log" aria-live="polite"></ol>
+        </section>
+        <details class="instructions">
+          <summary>How to play & symbols</summary>
+          <p>Explore the 4×4 cave and bring the gold back to the bottom-left camp. A <strong>stench</strong> means the living Wumpus is in an adjacent room; a <strong>breeze</strong> means an adjacent room has a pit; <strong>glitter</strong> means gold is here. A boundary collision makes a bump. Face a direction, then shoot to send your single arrow down that corridor. Each move costs 1 point, shooting costs 10, collecting gold earns 100, returning with it earns 1000, and a fatal fall costs 1000.</p>
+          <p>Arrow keys or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move and turn you. Space shoots. The AI uses only visited-room percepts and its own deductions; its risky fallback is not guaranteed to survive.</p>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    "use strict";
+    const SIZE = 4;
+    const START = { x: 0, y: 3 };
+    const DIRS = {
+      N: { dx: 0, dy: -1, icon: "↑" },
+      E: { dx: 1, dy: 0, icon: "→" },
+      S: { dx: 0, dy: 1, icon: "↓" },
+      W: { dx: -1, dy: 0, icon: "←" }
+    };
+    const boardElement = document.getElementById("board");
+    const ui = {
+      arrows: document.getElementById("arrows"),
+      agentPosition: document.getElementById("agent-position"),
+      agentState: document.getElementById("agent-state"),
+      aiButton: document.getElementById("ai-button"),
+      eventLog: document.getElementById("event-log"),
+      facing: document.getElementById("facing"),
+      knowledge: document.getElementById("knowledge-text"),
+      position: document.getElementById("position"),
+      percepts: document.getElementById("percepts"),
+      score: document.getElementById("score"),
+      shoot: document.getElementById("shoot-button"),
+      status: document.getElementById("status-text"),
+      statusStrip: document.getElementById("status-strip"),
+      visited: document.getElementById("visited-count")
+    };
+    let game;
+    let aiTimer = null;
+    let eventSequence = 0;
+    const ai = { running: false, visited: new Set(), observations: new Map(), knownSafe: new Set(), suspectedPit: new Set(), suspectedWumpus: new Set() };
+
+    function keyOf(position) { return `${position.x},${position.y}`; }
+    function fromKey(key) { const [x, y] = key.split(",").map(Number); return { x, y }; }
+    function inBounds(position) { return position.x >= 0 && position.x < SIZE && position.y >= 0 && position.y < SIZE; }
+    function neighbors(position) {
+      return Object.values(DIRS).map(({ dx, dy }) => ({ x: position.x + dx, y: position.y + dy })).filter(inBounds);
+    }
+
+    function makeWorld() {
+      const available = [];
+      for (let y = 0; y < SIZE; y += 1) {
+        for (let x = 0; x < SIZE; x += 1) {
+          if (x !== START.x || y !== START.y) available.push({ x, y });
+        }
+      }
+      for (let index = available.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [available[index], available[swapIndex]] = [available[swapIndex], available[index]];
+      }
+      const [wumpus, gold, ...pitRooms] = available;
+      return { wumpus, gold, pits: new Set(pitRooms.slice(0, 3).map(keyOf)) };
+    }
+
+    function resetAI() {
+      ai.running = false;
+      ai.visited = new Set();
+      ai.observations = new Map();
+      ai.knownSafe = new Set([keyOf(START)]);
+      ai.suspectedPit = new Set();
+      ai.suspectedWumpus = new Set();
+    }
+
+    function newGame() {
+      if (aiTimer !== null) window.clearInterval(aiTimer);
+      aiTimer = null;
+      resetAI();
+      game = {
+        world: makeWorld(), position: { ...START }, direction: "N", arrows: 1, score: 0,
+        alive: true, status: "playing", goldCollected: false, wumpusAlive: true,
+        visited: new Set([keyOf(START)]), transient: [], log: []
+      };
+      eventSequence = 0;
+      setStatus("The cave is quiet. Find the gold and return to camp.");
+      addLog("You set out from camp. The cave layout is unknown.");
+      observeCurrentRoom();
+      updateKnowledge();
+      render();
+    }
+
+    function getPercepts(position = game.position) {
+      const adjacent = neighbors(position);
+      const isStench = game.wumpusAlive && adjacent.some(room => keyOf(room) === keyOf(game.world.wumpus));
+      const isBreeze = adjacent.some(room => game.world.pits.has(keyOf(room)));
+      const isGlitter = !game.goldCollected && keyOf(position) === keyOf(game.world.gold);
+      return { stench: isStench, breeze: isBreeze, glitter: isGlitter };
+    }
+
+    function observeCurrentRoom() {
+      const currentKey = keyOf(game.position);
+      game.visited.add(currentKey);
+      const percepts = getPercepts();
+      ai.visited.add(currentKey);
+      ai.observations.set(currentKey, percepts);
+      ai.knownSafe.add(currentKey);
+      updateKnowledge();
+      return percepts;
+    }
+
+    function inferKnowledge() {
+      ai.suspectedPit.clear();
+      ai.suspectedWumpus.clear();
+      const pitRuledOut = new Set();
+      const wumpusRuledOut = new Set();
+      for (const [roomKey, percepts] of ai.observations) {
+        const room = fromKey(roomKey);
+        for (const adjacent of neighbors(room)) {
+          const adjacentKey = keyOf(adjacent);
+          if (percepts.breeze) ai.suspectedPit.add(adjacentKey);
+          else pitRuledOut.add(adjacentKey);
+          if (percepts.stench && game.wumpusAlive) ai.suspectedWumpus.add(adjacentKey);
+          else wumpusRuledOut.add(adjacentKey);
+        }
+      }
+      for (const roomKey of ai.visited) {
+        ai.knownSafe.add(roomKey);
+        ai.suspectedPit.delete(roomKey);
+        ai.suspectedWumpus.delete(roomKey);
+      }
+      for (let y = 0; y < SIZE; y += 1) {
+        for (let x = 0; x < SIZE; x += 1) {
+          const roomKey = keyOf({ x, y });
+          if (pitRuledOut.has(roomKey) && wumpusRuledOut.has(roomKey)) {
+            ai.knownSafe.add(roomKey);
+            ai.suspectedPit.delete(roomKey);
+            ai.suspectedWumpus.delete(roomKey);
+          }
+        }
+      }
+    }
+
+    function updateKnowledge() {
+      inferKnowledge();
+      const current = ai.observations.get(keyOf(game.position));
+      if (!ai.running) {
+        ui.knowledge.textContent = current ? `Observed ${ai.visited.size} room${ai.visited.size === 1 ? "" : "s"}. Known safe: ${ai.knownSafe.size}. Predictions are based only on visited percepts.` : "Start the agent to explore from its own percept-based map.";
+        return;
+      }
+      const uncertain = new Set([...ai.suspectedPit, ...ai.suspectedWumpus]);
+      ui.knowledge.textContent = `Confirmed safe: ${ai.knownSafe.size} rooms. Uncertain danger: ${uncertain.size} room${uncertain.size === 1 ? "" : "s"}. Visited: ${ai.visited.size}.`;
+    }
+
+    function addLog(message) {
+      game.log.unshift({ id: ++eventSequence, message, time: new Date() });
+      game.log.length = Math.min(game.log.length, 36);
+    }
+
+    function setStatus(message, state = "playing") {
+      game.status = state;
+      ui.status.textContent = message;
+      ui.statusStrip.dataset.state = state;
+    }
+
+    function updatePercepts() {
+      const current = getPercepts();
+      const tags = [];
+      if (current.stench) tags.push(["stench", "Stench"]);
+      if (current.breeze) tags.push(["breeze", "Breeze"]);
+      if (current.glitter) tags.push(["glitter", "Glitter"]);
+      for (const event of game.transient) tags.push(["event", event]);
+      ui.percepts.replaceChildren();
+      if (!tags.length) {
+        const empty = document.createElement("span");
+        empty.className = "empty";
+        empty.textContent = "No percepts";
+        ui.percepts.append(empty);
+      } else {
+        for (const [className, label] of tags) {
+          const tag = document.createElement("span");
+          tag.className = `tag ${className}`;
+          tag.textContent = label;
+          ui.percepts.append(tag);
+        }
+      }
+    }
+
+    function renderBoard() {
+      const fragment = document.createDocumentFragment();
+      for (let y = 0; y < SIZE; y += 1) {
+        for (let x = 0; x < SIZE; x += 1) {
+          const position = { x, y };
+          const roomKey = keyOf(position);
+          const isSeen = game.visited.has(roomKey);
+          const isCurrent = keyOf(game.position) === roomKey;
+          const cell = document.createElement("div");
+          cell.className = `cell ${isSeen ? "seen" : "unknown"}${isCurrent ? " current" : ""}${position.x === START.x && position.y === START.y ? " start" : ""}`;
+          cell.setAttribute("role", "gridcell");
+          cell.setAttribute("aria-label", isSeen ? `Room ${x}, ${y}${isCurrent ? ", player here" : ""}` : `Unexplored room ${x}, ${y}`);
+          if (ai.knownSafe.has(roomKey) && !isSeen) cell.classList.add("ai-safe");
+          if ((ai.suspectedPit.has(roomKey) || ai.suspectedWumpus.has(roomKey)) && !isSeen) cell.classList.add("ai-risk");
+          const content = document.createElement("div");
+          content.className = "cell-content";
+          if (isCurrent && game.alive) {
+            const player = document.createElement("span");
+            player.className = "cell-player";
+            player.textContent = "🧭";
+            player.title = `You, facing ${game.direction}`;
+            content.append(player);
+          }
+          const reveal = game.status !== "playing";
+          if (isSeen || reveal) {
+            if (game.world.pits.has(roomKey)) content.append(makeSymbol("🕳️", "Pit"));
+            if (roomKey === keyOf(game.world.wumpus) && game.wumpusAlive) content.append(makeSymbol("👹", "Living Wumpus"));
+            if (roomKey === keyOf(game.world.wumpus) && !game.wumpusAlive) content.append(makeSymbol("💀", "Defeated Wumpus"));
+            if (roomKey === keyOf(game.world.gold) && !game.goldCollected) content.append(makeSymbol("✨", "Gold"));
+            if (roomKey === keyOf(game.world.gold) && game.goldCollected) content.append(makeSymbol("✓", "Gold collected"));
+          }
+          if (content.childElementCount) cell.append(content);
+          const label = document.createElement("span");
+          label.className = "cell-label";
+          label.textContent = `${x},${y}`;
+          cell.append(label);
+          fragment.append(cell);
+        }
+      }
+      boardElement.replaceChildren(fragment);
+      document.getElementById("visited-count").textContent = `Rooms explored: ${game.visited.size} / 16`;
+    }
+
+    function makeSymbol(symbol, label) {
+      const element = document.createElement("span");
+      element.textContent = symbol;
+      element.title = label;
+      element.setAttribute("aria-label", label);
+      return element;
+    }
+
+    function renderLog() {
+      const fragment = document.createDocumentFragment();
+      for (const entry of game.log) {
+        const row = document.createElement("li");
+        const time = document.createElement("time");
+        time.textContent = String(entry.id).padStart(2, "0");
+        const text = document.createElement("span");
+        text.textContent = entry.message;
+        row.append(time, text);
+        fragment.append(row);
+      }
+      ui.eventLog.replaceChildren(fragment);
+    }
+
+    function render() {
+      renderBoard();
+      ui.score.textContent = String(game.score);
+      ui.arrows.innerHTML = `${game.arrows} <small> / 1</small>`;
+      ui.position.textContent = `(${game.position.x}, ${game.position.y})`;
+      ui.agentPosition.innerHTML = `(${game.position.x}, ${game.position.y}) <span>${keyOf(game.position) === keyOf(START) ? "· camp" : "· cave"}</span>`;
+      ui.facing.innerHTML = `${DIRS[game.direction].icon} <small>${game.direction}</small>`;
+      ui.agentState.textContent = ai.running ? "EXPLORING" : "MANUAL";
+      ui.aiButton.innerHTML = ai.running ? "■ <span>Stop AI</span>" : "▶ <span>Start AI</span>";
+      ui.aiButton.title = ai.running ? "Stop the agent" : "Start the knowledge-based agent";
+      ui.shoot.disabled = game.arrows === 0 || game.status !== "playing";
+      updatePercepts();
+      renderLog();
+      updateKnowledge();
+    }
+
+    function finishGame(state, message) {
+      game.alive = false;
+      if (aiTimer !== null) window.clearInterval(aiTimer);
+      aiTimer = null;
+      ai.running = false;
+      setStatus(message, state);
+      addLog(message);
+    }
+
+    function collectGoldIfPresent() {
+      if (game.goldCollected || keyOf(game.position) !== keyOf(game.world.gold)) return false;
+      game.goldCollected = true;
+      game.score += 100;
+      game.transient = [];
+      addLog("You collected the gold. Return to camp!");
+      setStatus("Gold secured. Return to the bottom-left camp to win.");
+      return true;
+    }
+
+    function move(direction) {
+      if (!game.alive) return;
+      game.direction = direction;
+      game.score -= 1;
+      game.transient = [];
+      const next = { x: game.position.x + DIRS[direction].dx, y: game.position.y + DIRS[direction].dy };
+      if (!inBounds(next)) {
+        game.transient.push("Bump");
+        addLog(`Bump. The ${directionName(direction)} edge blocks the way.`);
+        render();
+        return;
+      }
+      game.position = next;
+      const roomKey = keyOf(next);
+      game.visited.add(roomKey);
+      observeCurrentRoom();
+      addLog(`Moved ${directionName(direction)} to (${next.x}, ${next.y}).`);
+      if (game.world.pits.has(roomKey)) {
+        game.score -= 1000;
+        finishGame("lost", "You fell into a pit. Expedition over.");
+      } else if (game.wumpusAlive && roomKey === keyOf(game.world.wumpus)) {
+        game.score -= 1000;
+        finishGame("lost", "The Wumpus got you. Expedition over.");
+      } else {
+        collectGoldIfPresent();
+        if (game.goldCollected && roomKey === keyOf(START)) {
+          game.score += 1000;
+          finishGame("won", "Gold returned to camp. Expedition successful!");
+        }
+      }
+      render();
+    }
+
+    function shoot() {
+      if (!game.alive || game.arrows <= 0) return;
+      game.arrows -= 1;
+      game.score -= 10;
+      game.transient = [];
+      let target = { ...game.position };
+      let killed = false;
+      while (true) {
+        target = { x: target.x + DIRS[game.direction].dx, y: target.y + DIRS[game.direction].dy };
+        if (!inBounds(target)) break;
+        if (game.wumpusAlive && keyOf(target) === keyOf(game.world.wumpus)) {
+          game.wumpusAlive = false;
+          killed = true;
+          break;
+        }
+      }
+      if (killed) {
+        game.transient.push("Scream");
+        addLog(`Scream! Your arrow killed the Wumpus to the ${directionName(game.direction)}.`);
+        setStatus("A distant scream. The Wumpus is dead; stench has vanished.");
+        inferKnowledge();
+      } else {
+        addLog(`You fired ${game.arrows === 0 ? "your last arrow" : "an arrow"} ${directionName(game.direction)}. No scream.`);
+        setStatus(game.arrows === 0 ? "No arrows remain. Choose your route carefully." : "The arrow flew into the darkness. No scream.");
+      }
+      render();
+    }
+
+    function directionName(direction) { return { N: "north", E: "east", S: "south", W: "west" }[direction]; }
+
+    function startAI() {
+      if (!game.alive || ai.running) return;
+      ai.running = true;
+      observeCurrentRoom();
+      addLog("Knowledge-based agent started.");
+      setStatus("The agent is exploring using its own observations.");
+      render();
+      aiTimer = window.setInterval(aiStep, 720);
+    }
+
+    function stopAI(message = "Knowledge-based agent stopped.") {
+      if (aiTimer !== null) window.clearInterval(aiTimer);
+      aiTimer = null;
+      const wasRunning = ai.running;
+      ai.running = false;
+      if (wasRunning) addLog(message);
+      if (game.status === "playing" && wasRunning) setStatus("Agent stopped. You can take over at any time.");
+      render();
+    }
+
+    function findRouteTo(targetKeys, allowOnlySafe = true) {
+      const startKey = keyOf(game.position);
+      const queue = [{ key: startKey, path: [] }];
+      const visited = new Set([startKey]);
+      while (queue.length) {
+        const current = queue.shift();
+        if (current.path.length && targetKeys.has(current.key)) return current.path;
+        for (const next of neighbors(fromKey(current.key))) {
+          const nextKey = keyOf(next);
+          if (visited.has(nextKey)) continue;
+          if (targetKeys.has(nextKey)) return [...current.path, next];
+          if (allowOnlySafe && !ai.knownSafe.has(nextKey)) continue;
+          visited.add(nextKey);
+          const path = [...current.path, next];
+          queue.push({ key: nextKey, path });
+        }
+      }
+      return null;
+    }
+
+    function aiStep() {
+      if (!game.alive || !ai.running) { stopAI("Agent stopped because the game ended."); return; }
+      inferKnowledge();
+      const currentKey = keyOf(game.position);
+      if (game.goldCollected && currentKey !== keyOf(START)) {
+        const home = findRouteTo(new Set([keyOf(START)]));
+        if (home && home.length) { moveToward(home[0]); return; }
+      }
+      const safeUnexplored = new Set([...ai.knownSafe].filter(roomKey => !ai.visited.has(roomKey)));
+      const safeRoute = findRouteTo(safeUnexplored);
+      if (safeRoute && safeRoute.length) {
+        moveToward(safeRoute[0]);
+        return;
+      }
+
+      const candidateFrontiers = [];
+      for (const visitedKey of ai.visited) {
+        for (const neighbor of neighbors(fromKey(visitedKey))) {
+          const neighborKey = keyOf(neighbor);
+          if (!ai.visited.has(neighborKey) && !ai.knownSafe.has(neighborKey)) candidateFrontiers.push(neighborKey);
+        }
+      }
+      const frontierSet = new Set(candidateFrontiers);
+      const route = findRouteTo(frontierSet);
+      if (route && route.length) {
+        addLog(`No known-safe route remains. Agent takes a calculated risk toward (${route[0].x}, ${route[0].y}).`);
+        moveToward(route[0]);
+        return;
+      }
+      stopAI("Agent has no unexplored room to pursue.");
+    }
+
+    function moveToward(next) {
+      const dx = next.x - game.position.x;
+      const dy = next.y - game.position.y;
+      const direction = Object.keys(DIRS).find(key => DIRS[key].dx === dx && DIRS[key].dy === dy);
+      if (direction) move(direction);
+      if (!game.alive && ai.running) {
+        ai.running = false;
+        aiTimer = null;
+      }
+    }
+
+    function handleKeydown(event) {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const key = event.key.toLowerCase();
+      const keyDirections = { arrowup: "N", w: "N", arrowright: "E", d: "E", arrowdown: "S", s: "S", arrowleft: "W", a: "W" };
+      if (keyDirections[key]) {
+        event.preventDefault();
+        if (ai.running) stopAI("Agent paused for manual control.");
+        move(keyDirections[key]);
+      } else if (key === " ") {
+        event.preventDefault();
+        if (ai.running) stopAI("Agent paused for manual control.");
+        shoot();
+      }
+    }
+
+    document.querySelectorAll("[data-move]").forEach(button => {
+      button.addEventListener("click", () => {
+        if (ai.running) stopAI("Agent paused for manual control.");
+        move(button.dataset.move);
+      });
+    });
+    ui.shoot.addEventListener("click", () => {
+      if (ai.running) stopAI("Agent paused for manual control.");
+      shoot();
+    });
+    ui.aiButton.addEventListener("click", () => ai.running ? stopAI() : startAI());
+    document.getElementById("restart-button").addEventListener("click", newGame);
+    document.getElementById("clear-log").addEventListener("click", () => { game.log = []; renderLog(); });
+    document.addEventListener("keydown", handleKeydown);
+
+    newGame();
+  </script>
+</body>
+</html>
